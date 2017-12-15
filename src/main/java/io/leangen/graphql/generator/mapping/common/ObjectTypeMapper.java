@@ -3,8 +3,12 @@ package io.leangen.graphql.generator.mapping.common;
 import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import graphql.Scalars;
@@ -14,6 +18,7 @@ import graphql.schema.GraphQLInterfaceType;
 import graphql.schema.GraphQLObjectType;
 import graphql.schema.GraphQLOutputType;
 import graphql.schema.GraphQLTypeReference;
+import io.leangen.graphql.annotations.types.GraphQLType;
 import io.leangen.graphql.generator.BuildContext;
 import io.leangen.graphql.generator.OperationMapper;
 import io.leangen.graphql.generator.types.MappedGraphQLObjectType;
@@ -87,7 +92,10 @@ public class ObjectTypeMapper extends CachingMapper<GraphQLObjectType, GraphQLIn
                     .dataFetcher(env -> env.getSource() == null ? null : env.getSource().getClass().getSimpleName())
                     .build());
         }
-        return fields;
+        GraphQLType graphQLType = javaType.getAnnotation(GraphQLType.class);
+        List<String> specifiedOrder = graphQLType != null ? Arrays.asList(graphQLType.propOrder()) : Collections.emptyList();
+        final List<GraphQLFieldDefinition> sortFields = sortFieldsBySpecifiedOrderAndTheRestAlphabetically(fields, specifiedOrder);
+        return sortFields;
     }
 
     @SuppressWarnings("WeakerAccess")
@@ -102,5 +110,20 @@ public class ObjectTypeMapper extends CachingMapper<GraphQLObjectType, GraphQLIn
                 inter -> interfaces.add(operationMapper.toGraphQLType(inter, abstractTypes, buildContext)));
 
         return interfaces;
+    }
+
+    private static List<GraphQLFieldDefinition> sortFieldsBySpecifiedOrderAndTheRestAlphabetically(List<GraphQLFieldDefinition> fields, List<String> specifiedOrder) {
+        Map<String, GraphQLFieldDefinition> fieldMap = new TreeMap<>();
+        for (GraphQLFieldDefinition field : fields) {
+            fieldMap.put(field.getName(), field);
+        }
+        List<GraphQLFieldDefinition> result = new ArrayList<>();
+        for (String name : specifiedOrder) {
+            if (fieldMap.containsKey(name)) {
+                result.add(fieldMap.remove(name));
+            }
+        }
+        result.addAll(fieldMap.values());
+        return result;
     }
 }
